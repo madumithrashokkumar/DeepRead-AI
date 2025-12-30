@@ -1,10 +1,8 @@
 streamlit
 langchain
-langchain-openai
+langchain-google-genai
 langchain-community
 langchain-text-splitters
 chromadb
 pypdf
 tiktoken
-openai
-langchain-google-genai
