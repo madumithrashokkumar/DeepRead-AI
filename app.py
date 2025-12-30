@@ -3,8 +3,10 @@ import os
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
-from langchain_community.vectorstores import InMemoryVectorStore  # Changed path
-from langchain.chains import RetrievalQA
+from langchain_core.vectorstores import InMemoryVectorStore
+from langchain.chains import create_retrieval_chain
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain_core.prompts import ChatPromptTemplate
 
 # --- APP CONFIGURATION ---
 st.set_page_config(page_title="DeepRead AI", page_icon="📚")
@@ -22,7 +24,7 @@ with st.sidebar:
     uploaded_files = st.file_uploader("Upload PDFs", type="pdf", accept_multiple_files=True)
     process_button = st.button("Analyze Documents")
 
-# --- CORE RAG LOGIC ---
+# --- CORE RAG LOGIC (2025 MODERN VERSION) ---
 if uploaded_files and process_button:
     with st.spinner("Analyzing..."):
         try:
@@ -35,27 +37,34 @@ if uploaded_files and process_button:
                 all_docs.extend(loader.load())
                 os.remove(temp_path)
 
-            # Split text
             text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
             splits = text_splitter.split_documents(all_docs)
 
-            # Create Embeddings
             embeddings = GoogleGenerativeAIEmbeddings(
                 model="models/text-embedding-004", 
                 google_api_key=api_key
             )
 
-            # CREATE VECTOR STORE (Simplified)
-            vectorstore = InMemoryVectorStore.from_documents(
-                documents=splits, 
-                embedding=embeddings
-            )
+            vectorstore = InMemoryVectorStore.from_documents(documents=splits, embedding=embeddings)
+            retriever = vectorstore.as_retriever()
             
-            # Initialize LLM & Chain
             llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash-8b", google_api_key=api_key)
-            st.session_state.qa_chain = RetrievalQA.from_chain_type(
-                llm=llm, chain_type="stuff", retriever=vectorstore.as_retriever()
+
+            # NEW 2025 RAG STRUCTURE
+            system_prompt = (
+                "You are an assistant for question-answering tasks. "
+                "Use the following pieces of retrieved context to answer the question. "
+                "If you don't know the answer, say that you don't know.\n\n"
+                "{context}"
             )
+            prompt = ChatPromptTemplate.from_messages([
+                ("system", system_prompt),
+                ("human", "{input}"),
+            ])
+            
+            question_answer_chain = create_stuff_documents_chain(llm, prompt)
+            st.session_state.rag_chain = create_retrieval_chain(retriever, question_answer_chain)
+            
             st.success("Ready! Ask your questions below.")
             
         except Exception as e:
@@ -65,9 +74,10 @@ if uploaded_files and process_button:
 st.divider()
 query = st.text_input("Ask a question about your documents:")
 if query:
-    if "qa_chain" in st.session_state:
+    if "rag_chain" in st.session_state:
         with st.spinner("Thinking..."):
-            response = st.session_state.qa_chain.invoke(query)
-            st.markdown(f"### 🤖 Answer:\n{response['result']}")
+            # Using the new .invoke() pattern
+            response = st.session_state.rag_chain.invoke({"input": query})
+            st.markdown(f"### 🤖 Answer:\n{response['answer']}")
     else:
         st.warning("Please analyze a PDF first.")
