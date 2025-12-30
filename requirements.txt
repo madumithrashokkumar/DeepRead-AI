@@ -7,3 +7,4 @@ chromadb
 pypdf
 tiktoken
 openai
+langchain-google-genai
