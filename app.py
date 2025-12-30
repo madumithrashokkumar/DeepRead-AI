@@ -4,14 +4,13 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_community.vectorstores import Chroma
-from langchain_classic.chains import RetrievalQA  # Using the classic chain for stability
+from langchain.chains import RetrievalQA
 
 # --- APP CONFIGURATION ---
 st.set_page_config(page_title="DeepRead AI", page_icon="📚", layout="wide")
 st.title("📚 DeepRead: Academic Synthesis Engine")
 
 # --- AUTHENTICATION ---
-# This pulls your new AI Studio key from Streamlit Secrets
 api_key = st.secrets.get("GOOGLE_API_KEY")
 
 if not api_key:
@@ -31,7 +30,6 @@ if uploaded_files and process_button:
         
         # 1. Load and read PDFs
         for uploaded_file in uploaded_files:
-            # Save temporary file to read it
             temp_file = f"./temp_{uploaded_file.name}"
             with open(temp_file, "wb") as f:
                 f.write(uploaded_file.getbuffer())
@@ -40,20 +38,20 @@ if uploaded_files and process_button:
             all_docs.extend(loader.load())
             os.remove(temp_file) # Clean up
 
-        # 2. Split text into chunks (Optimized size for free tier)
-        text_splitter = RecursiveCharacterCharacterSplitter(chunk_size=1000, chunk_overlap=100)
+        # 2. Split text into chunks (Typo fixed here!)
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
         splits = text_splitter.split_documents(all_docs)
 
-        # 3. Create Embeddings (Updated model for 2025)
+        # 3. Create Embeddings
         embeddings = GoogleGenerativeAIEmbeddings(
             model="models/text-embedding-004", 
             google_api_key=api_key
         )
 
-        # 4. Create Vector Store (In-memory for Streamlit Cloud)
+        # 4. Create Vector Store
         vectorstore = Chroma.from_documents(documents=splits, embedding=embeddings)
         
-        # 5. Initialize LLM (Using the lighter 8b model to avoid quota errors)
+        # 5. Initialize LLM
         llm = ChatGoogleGenerativeAI(
             model="gemini-1.5-flash-8b", 
             google_api_key=api_key,
@@ -83,4 +81,4 @@ if query:
 
 # --- FOOTER ---
 st.markdown("---")
-st.caption("Powered by Google Gemini 1.5 Flash-8B & LangChain")
+st.caption("Developed for Academic Research | Powered by Gemini 1.5 & LangChain")
