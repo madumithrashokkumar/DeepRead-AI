@@ -3,7 +3,7 @@ import os
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
-from langchain_core.vectorstores import InMemoryVectorStore # Switched for stability
+from langchain_community.vectorstores import InMemoryVectorStore  # Changed path
 from langchain.chains import RetrievalQA
 
 # --- APP CONFIGURATION ---
