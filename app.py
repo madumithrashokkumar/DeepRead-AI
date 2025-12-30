@@ -1,66 +1,103 @@
 import streamlit as st
 import os
-from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_community.vectorstores import Chroma
 from langchain_community.document_loaders import PyPDFLoader
-# --- FIX IS HERE ---
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-# -------------------
 from langchain.chains import RetrievalQA
 
-# Rest of the code remains the same...
+# 1. Page Configuration
+st.set_page_config(page_title="DeepRead AI", layout="wide", page_icon="📚")
 
-# 1. UI Setup
-st.set_page_config(page_title="DeepRead AI", layout="wide")
-st.title("📚 DeepRead: Your Academic Research Copilot")
+# Custom CSS for a professional look
+st.markdown("""
+    <style>
+    .main { background-color: #f5f7f9; }
+    .stButton>button { width: 100%; border-radius: 5px; height: 3em; background-color: #007bff; color: white; }
+    </style>
+    """, unsafe_allow_html=True)
 
-# Sidebar for Uploads and Auto-Glossary
+st.title("📚 DeepRead: Academic Synthesis Engine")
+st.markdown("---")
+
+# 2. API Key Setup (From Streamlit Secrets)
+if "GOOGLE_API_KEY" in st.secrets:
+    api_key = st.secrets["GOOGLE_API_KEY"]
+else:
+    st.error("Please add your GOOGLE_API_KEY to Streamlit Secrets!")
+    st.stop()
+
+# 3. Sidebar: File Upload & Auto-Glossary
 with st.sidebar:
-    st.header("Upload Study Materials")
-    uploaded_files = st.file_uploader("Upload PDFs (Notes, Textbooks)", accept_multiple_files=True)
+    st.header("📂 Study Materials")
+    uploaded_files = st.file_uploader("Upload PDFs (Notes, Books)", type="pdf", accept_multiple_files=True)
+    
     st.divider()
-    st.header("📝 Auto-Glossary")
-    glossary_placeholder = st.empty()
+    st.header("🧠 Auto-Glossary")
+    glossary_area = st.empty()
+    glossary_area.info("Upload a PDF to generate a glossary of key terms.")
 
-# 2. Processing Logic
+# 4. Core Logic
 if uploaded_files:
     all_docs = []
-    for file in uploaded_files:
-        # Save temp file to load it
-        with open(file.name, "wb") as f:
-            f.write(file.getbuffer())
-        loader = PyPDFLoader(file.name)
-        all_docs.extend(loader.load())
-
-    # Split text into chunks
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
-    splits = text_splitter.split_documents(all_docs)
-
-    # Create Vector Store
-    vectorstore = Chroma.from_documents(documents=splits, embedding=OpenAIEmbeddings())
-    retriever = vectorstore.as_retriever()
-
-    # Define the AI Model
-    llm = ChatOpenAI(model_name="gpt-4o-mini", temperature=0)
-
-    # 3. Main Chat Interface
-    query = st.text_input("Ask a question across all documents:")
     
-    if query:
-        # Retrieval-Augmented Generation (RAG)
-        qa_chain = RetrievalQA.from_chain_type(llm=llm, chain_type="stuff", retriever=retriever, return_source_documents=True)
-        result = qa_chain.invoke({"query": query})
+    with st.spinner("DeepRead is indexing your documents..."):
+        for file in uploaded_files:
+            # Save temporary file
+            with open(file.name, "wb") as f:
+                f.write(file.getbuffer())
+            
+            loader = PyPDFLoader(file.name)
+            all_docs.extend(loader.load())
+            os.remove(file.name) # Clean up
+
+        # Split text for RAG
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=200)
+        splits = text_splitter.split_documents(all_docs)
+
+        # Initialize Gemini Embeddings & Vector Store
+        embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001", google_api_key=api_key)
+        vectorstore = Chroma.from_documents(documents=splits, embedding=embeddings)
         
-        st.subheader("DeepRead Answer:")
-        st.write(result["result"])
+        # Initialize Gemini Model
+        llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=api_key)
 
-        # Feature: Citation Mapping
-        st.subheader("📍 Sources & Citations:")
-        for doc in result["source_documents"]:
-            st.info(f"Source: {doc.metadata['source']} | Page: {doc.metadata['page'] + 1}")
+    st.success(f"✅ Loaded {len(uploaded_files)} documents. You are ready for exam prep!")
 
-    # Feature: Summarizer Mode (Button)
-    if st.button("Generate Exam Summary"):
-        summary_prompt = "Summarize the key concepts, formulas, and definitions from these notes for an exam."
-        summary_result = qa_chain.invoke({"query": summary_prompt})
-        st.success(summary_result["result"])
+    # 5. Feature: Auto-Glossary Sidebar Update
+    if st.sidebar.button("Generate Glossary"):
+        glossary_query = "List 5-10 technical or difficult terms from these documents and provide brief definitions for a student."
+        glossary_response = llm.invoke(glossary_query + str(all_docs[:2])) # Scan first few pages
+        glossary_area.markdown(glossary_response.content)
+
+    # 6. Main Interface: Tabs
+    tab1, tab2 = st.tabs(["💬 Ask your Notes", "📝 Exam Summarizer"])
+
+    with tab1:
+        query = st.text_input("Ask a question (e.g., 'Compare the two chapters on Mitochondria'):")
+        if query:
+            qa_chain = RetrievalQA.from_chain_type(
+                llm=llm, 
+                chain_type="stuff", 
+                retriever=vectorstore.as_retriever(), 
+                return_source_documents=True
+            )
+            response = qa_chain.invoke({"query": query})
+            
+            st.markdown("### 🤖 DeepRead Answer:")
+            st.write(response["result"])
+            
+            # Feature: Citation Mapping
+            st.markdown("### 📍 Source Citations:")
+            for doc in response["source_documents"]:
+                with st.expander(f"Reference: {doc.metadata['source']} (Page {doc.metadata['page']+1})"):
+                    st.write(doc.page_content)
+
+    with tab2:
+        if st.button("Generate Master Study Guide"):
+            with st.spinner("Synthesizing information..."):
+                summary_query = "Create a structured study guide. Include: 1. Main Concepts, 2. Key Formulas/Dates, 3. Possible Exam Questions."
+                # Using RAG to summarize
+                summary_qa = RetrievalQA.from_chain_type(llm=llm, chain_type="stuff", retriever=vectorstore.as_retriever())
+                summary_result = summary_qa.invoke({"query": summary_query})
+                st.markdown(summary_result["result"])
