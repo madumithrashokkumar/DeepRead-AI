@@ -1,9 +1,7 @@
 streamlit
+pypdf
 langchain
-langchain-classic
-langchain-google-genai
 langchain-community
+langchain-google-genai
 langchain-text-splitters
 chromadb
-pypdf
-tiktoken
