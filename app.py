@@ -5,9 +5,11 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_core.vectorstores import InMemoryVectorStore
 from langchain_core.prompts import ChatPromptTemplate
-# THE FIX: Direct imports from sub-packages
+# Using the most stable paths for 2025
+import langchain.chains.combine_documents as combine_docs
+import langchain.chains.retrieval as retrieval_chain
+from langchain.chains import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain.chains.retrieval import create_retrieval_chain
 
 # --- APP CONFIGURATION ---
 st.set_page_config(page_title="DeepRead AI", page_icon="📚")
