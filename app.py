@@ -47,22 +47,26 @@ if uploaded_files and process_button:
                 all_docs.extend(loader.load())
                 os.remove(temp_path)
 
-            text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=200)
+            # Increased chunk size slightly to reduce API calls
+            text_splitter = RecursiveCharacterTextSplitter(chunk_size=2500, chunk_overlap=250)
             splits = text_splitter.split_documents(all_docs)
 
+            # FIXED: Removed .with_retry() and added native request_options for 2025 compatibility
             embeddings = GoogleGenerativeAIEmbeddings(
                 model="models/text-embedding-004", 
-                google_api_key=api_key
-            ).with_retry(stop_after_attempt=5)
+                google_api_key=api_key,
+                task_type="retrieval_document"
+            )
 
             vectorstore = InMemoryVectorStore.from_documents(documents=splits, embedding=embeddings)
             retriever = vectorstore.as_retriever()
             
+            # LLM supports .with_retry() natively in 2025
             llm = ChatGoogleGenerativeAI(
                 model="gemini-1.5-flash", 
                 google_api_key=api_key,
                 temperature=0.3
-            )
+            ).with_retry(stop_after_attempt=3)
 
             prompt = ChatPromptTemplate.from_messages([
                 ("system", "You are an academic assistant. Use the context to answer precisely. Context: {context}"),
@@ -75,7 +79,7 @@ if uploaded_files and process_button:
             st.success("Analysis Complete!")
             
         except Exception as e:
-            st.error(f"Error: {str(e)}")
+            st.error(f"Error during analysis: {str(e)}")
 
 # --- CHAT INTERFACE ---
 st.divider()
@@ -87,6 +91,6 @@ if query:
                 response = st.session_state.rag_chain.invoke({"input": query})
                 st.markdown(f"### 🤖 Answer:\n{response['answer']}")
             except Exception as e:
-                st.error(f"Quota error: {str(e)}. Wait 60 seconds.")
+                st.error(f"Quota error: {str(e)}. Please wait 60 seconds for the API limit to reset.")
     else:
         st.warning("Please upload and analyze a PDF first.")
