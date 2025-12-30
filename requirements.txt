@@ -1,7 +1,7 @@
 streamlit
 pypdf
-langchain==1.1.0
-langchain-community==0.4.1
-langchain-google-genai
-langchain-text-splitters
-langchain-core
+langchain==0.3.13
+langchain-community==0.3.13
+langchain-google-genai==2.0.8
+langchain-text-splitters==0.3.4
+langchain-core==0.3.28
